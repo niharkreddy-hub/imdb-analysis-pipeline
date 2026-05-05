@@ -1,0 +1,82 @@
+
+==============================================================================
+FILE: data/title.akas.tsv
+==============================================================================
+File size on disk: 2,745.7 MB
+Rows loaded: 56,892,184
+Columns (8): ['titleId', 'ordering', 'title', 'region', 'language', 'types', 'attributes', 'isOriginalTitle']
+
+-------------------------------COLUMN ANALYSIS--------------------------------
+
+  Column: titleId
+    Nulls: 0 (0.00%)
+    Distinct non-null values: 12,445,723
+    Top 5 values:
+             313  tt0168366
+             251  tt0088814
+             192  tt0407304
+             178  tt1077274
+             160  tt15837206
+
+  Column: ordering
+    Nulls: 0 (0.00%)
+    Distinct non-null values: 313
+    Top 5 values:
+      12,445,712  1
+       8,856,117  2
+       5,938,972  3
+       5,661,273  4
+       5,575,673  5
+    Numeric range: min=1, max=313, mean=4.39
+
+  Column: title
+    Nulls: 0 (0.00%)
+    Distinct non-null values: 7,870,000
+    Top 5 values:
+         117,104  Episodio #1.1
+         106,455  Episodio #1.2
+         100,755  Episodio #1.3
+          93,819  Episodio #1.4
+          85,865  Episodio #1.5
+    [ARRAY-LIKE: 4% of sampled rows contain commas]
+
+  Column: region
+    Nulls: 12,501,208 (21.97%)
+    Distinct non-null values: 251
+    Top 5 values:
+       5,554,989  IN
+       5,488,062  DE
+       5,465,038  JP
+       5,445,582  FR
+       5,359,987  ES
+
+  Column: language
+    Nulls: 18,656,150 (32.79%)
+    Distinct non-null values: 110
+    Top 5 values:
+       5,303,208  ja
+       5,241,097  fr
+       5,205,562  hi
+       5,183,398  es
+       5,170,336  de
+
+  Column: types
+    Nulls: 38,673,305 (67.98%)
+    Distinct non-null values: 23
+    All values: ['alternative', 'alternative\x02festival', 'alternative\x02tv', 'alternative\x02video', 'dvd', 'dvd\x02alternative', 'dvd\x02video', 'festival', 'imdbDisplay', 'imdbDisplay\x02dvd', 'imdbDisplay\x02festival', 'imdbDisplay\x02tv', 'imdbDisplay\x02video', 'imdbDisplay\x02working', 'original', 'tv', 'tv\x02video', 'video', 'working', 'working\x02alternative', 'working\x02festival', 'working\x02tv', 'working\x02video']
+
+  Column: attributes
+    Nulls: 56,581,940 (99.45%)
+    Distinct non-null values: 184
+    Top 5 values:
+          31,203  transliterated title
+          24,228  alternative spelling
+          20,006  literal English title
+          19,369  complete title
+          17,294  new title
+
+  Column: isOriginalTitle
+    Nulls: 0 (0.00%)
+    Distinct non-null values: 2
+    All values: ['0', '1']
+    Numeric range: min=0, max=1, mean=0.22

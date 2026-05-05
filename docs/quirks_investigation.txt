@@ -1,0 +1,213 @@
+
+==============================================================================
+CHECK 1: title.basics.titleType - full distribution
+==============================================================================
+Distinct values: 11
+titleType
+tvEpisode       9638312
+short           1129046
+movie            745211
+video            325430
+tvSeries         298893
+tvMovie          154792
+tvMiniSeries      70007
+tvSpecial         57909
+videoGame         49009
+tvShort           10988
+tvPilot               1
+
+==============================================================================
+CHECK 2: title.basics.isAdult - column shift corruption
+==============================================================================
+Total rows: 12,479,598
+Rows with isAdult NOT in (0,1): 487
+Percentage corrupt: 0.0039%
+
+Distinct corrupt values:
+isAdult
+1979    60
+1980    55
+1978    54
+1985    50
+1974    33
+1972    29
+1984    27
+1977    20
+1973    16
+1976    16
+1975    16
+1986    15
+1969    13
+1983    11
+1981    10
+1982     9
+2023     7
+1970     5
+1988     5
+1966     5
+
+Sample corrupt tconsts (first 10):
+['tt10233364', 'tt10970874', 'tt11670006', 'tt11868642', 'tt12149332', 'tt12415330', 'tt27147391', 'tt27404292', 'tt27493617', 'tt27493772']
+
+Decision: drop these rows during staging-to-core load.
+
+==============================================================================
+CHECK 3: title.basics.genres - actual distinct genre count
+==============================================================================
+Total non-null rows: 11,943,826
+Distinct genres after splitting: 28
+
+All genres (alphabetical):
+  Action
+  Adult
+  Adventure
+  Animation
+  Biography
+  Comedy
+  Crime
+  Documentary
+  Drama
+  Family
+  Fantasy
+  Film-Noir
+  Game-Show
+  History
+  Horror
+  Music
+  Musical
+  Mystery
+  News
+  Reality-TV
+  Romance
+  Sci-Fi
+  Short
+  Sport
+  Talk-Show
+  Thriller
+  War
+  Western
+
+Genre frequency (top 10):
+genres
+Drama          3482570
+Comedy         2407530
+Talk-Show      1550163
+Short          1324529
+News           1257514
+Documentary    1187213
+Romance        1148817
+Family          915219
+Reality-TV      701078
+Animation       623449
+
+==============================================================================
+CHECK 4: title.basics - year and runtime outliers
+==============================================================================
+startYear:
+  Range: 1874 to 2115
+  Pre-1880:  32
+  Post-2030: 5
+
+endYear:
+  Range: 3 to 2035
+  Pre-1900: 10
+
+runtimeMinutes:
+  Range: 0 to 3692080
+  Over 1,000 min:   413
+  Over 10,000 min:  17
+  Over 100,000 min: 2
+
+Top 5 runtime outliers:
+    tconst  runtimeMinutes
+ tt7493646       3692080.0
+tt38820824        146445.0
+tt29302558         59460.0
+ tt8273150         51420.0
+ tt3854496         43200.0
+
+==============================================================================
+CHECK 5: name.basics - birth and death year outliers
+==============================================================================
+birthYear:
+  Range: 4 to 2026
+  Pre-1700:       369
+  Future (>2026): 0
+
+deathYear:
+  Range: 17 to 2026
+  Pre-1700: 288
+
+Sample suspicious birthYears (under 1700):
+   nconst            primaryName  birthYear
+nm0000636    William Shakespeare     1564.0
+nm0001925  Johann Sebastian Bach     1685.0
+nm0005594 George Frideric Handel     1685.0
+nm0006334        Antonio Vivaldi     1678.0
+nm0012634              Aeschylus      525.0
+
+==============================================================================
+CHECK 6: title.principals.characters - JSON validity
+==============================================================================
+Sampled non-null characters: 112,020
+Valid JSON:   112,020
+Invalid JSON: 0
+
+All sampled values parse as valid JSON. Safe to load as JSONB.
+
+==============================================================================
+CHECK 7: title.akas.types - non-standard sub-delimiter
+==============================================================================
+Sampled non-null types: 1,649,056
+Containing x02 separator: 182
+Percentage: 0.01%
+
+Distinct atomic types after splitting on x02:
+  alternative
+  dvd
+  festival
+  imdbDisplay
+  original
+  tv
+  video
+  working
+
+Key insight: split on x02 (NOT comma) when normalizing this column.
+
+==============================================================================
+CHECK 8: orphan nconsts in title.crew
+==============================================================================
+Loading all nconsts from name.basics (this may take 30s)...
+Total nconsts in name.basics: 15,300,272
+
+Sampling 1M rows of title.crew to find orphan directors...
+Distinct director nconsts in sample: 154,470
+NOT found in name.basics: 2
+Orphan rate: 0.00%
+
+Sample orphan nconsts: ['nm17757903', 'nm0993895']
+
+Decision: declare FK constraints loosely (NOT VALID) or insert UNKNOWN stubs.
+
+==============================================================================
+CHECK 9: title.principals.category - full distribution
+==============================================================================
+Distinct values: 13
+category
+actor                  1732907
+actress                 992736
+writer                  491518
+director                388881
+producer                282932
+cinematographer         276991
+editor                  235094
+self                    223960
+composer                206453
+production_designer      91296
+casting_director         44151
+archive_footage          32567
+archive_sound              514
+
+==============================================================================
+DONE.
+==============================================================================

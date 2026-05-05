@@ -1,0 +1,51 @@
+
+==============================================================================
+FILE: data/title.episode.tsv
+==============================================================================
+File size on disk: 241.5 MB
+Rows loaded: 9,638,312
+Columns (4): ['tconst', 'parentTconst', 'seasonNumber', 'episodeNumber']
+
+-------------------------------COLUMN ANALYSIS--------------------------------
+
+  Column: tconst
+    Nulls: 0 (0.00%)
+    Distinct non-null values: 9,638,312
+    Top 5 values:
+               1  tt0031458
+               1  tt3480604
+               1  tt3480568
+               1  tt3480570
+               1  tt3480572
+
+  Column: parentTconst
+    Nulls: 0 (0.00%)
+    Distinct non-null values: 235,886
+    Top 5 values:
+          26,423  tt5955216
+          18,593  tt12164062
+          15,366  tt0058796
+          14,973  tt38973332
+          14,818  tt38770489
+
+  Column: seasonNumber
+    Nulls: 1,994,679 (20.70%)
+    Distinct non-null values: 333
+    Top 5 values:
+       4,851,292  1
+         724,667  2
+         412,453  3
+         282,009  4
+         207,417  5
+    Numeric range: min=1, max=2,024, mean=3.85
+
+  Column: episodeNumber
+    Nulls: 1,994,679 (20.70%)
+    Distinct non-null values: 15,979
+    Top 5 values:
+         349,717  1
+         315,046  2
+         299,900  3
+         280,610  4
+         259,905  5
+    Numeric range: min=0, max=91,334, mean=449.21

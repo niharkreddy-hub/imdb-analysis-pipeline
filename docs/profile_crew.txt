@@ -1,0 +1,41 @@
+
+==============================================================================
+FILE: data/title.crew.tsv
+==============================================================================
+File size on disk: 392.9 MB
+Rows loaded: 12,479,598
+Columns (3): ['tconst', 'directors', 'writers']
+
+-------------------------------COLUMN ANALYSIS--------------------------------
+
+  Column: tconst
+    Nulls: 0 (0.00%)
+    Distinct non-null values: 12,479,598
+    Top 5 values:
+               1  tt0000001
+               1  tt3461604
+               1  tt3461588
+               1  tt3461590
+               1  tt34615909
+
+  Column: directors
+    Nulls: 5,508,816 (44.14%)
+    Distinct non-null values: 1,010,130
+    Top 5 values:
+          11,464  nm1203430
+          10,353  nm1409127
+           8,141  nm12930298
+           8,024  nm13220986
+           7,434  nm5236281,nm5239804
+    [ARRAY-LIKE: 6% of sampled rows contain commas]
+
+  Column: writers
+    Nulls: 6,127,072 (49.10%)
+    Distinct non-null values: 1,499,850
+    Top 5 values:
+          15,836  nm6352729
+          12,850  nm0596393
+          11,495  nm7370686
+          10,990  nm0934807
+          10,567  nm0915961
+    [ARRAY-LIKE: 19% of sampled rows contain commas]
