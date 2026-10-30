@@ -5,6 +5,7 @@ the transform and assertions. Does not download IMDb files or use real credentia
 """
 import argparse
 import importlib.util
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -30,8 +31,11 @@ def main():
     with tempfile.TemporaryDirectory() as directory:
         directory = Path(directory)
         for stem, (table, header) in loader.DATASETS.items():
-            body = query(f"COPY staging.{table} TO STDOUT WITH (FORMAT csv, DELIMITER E'\\t', NULL '\\N', QUOTE E'\\b')")
-            (directory / f"{stem}.tsv").write_bytes(("\t".join(header.split())+"\n").encode() + body)
+            # PostgreSQL CSV export quotes literal null-marker strings. IMDb TSV
+            # does not use those quotes, so reconstruct raw fields from JSON rows.
+            rows = [json.loads(line) for line in query(f"SELECT row_to_json(s) FROM staging.{table} s").splitlines()]
+            body = "".join("\t".join(r"\N" if value is None else value for value in row.values()) + "\n" for row in rows)
+            (directory / f"{stem}.tsv").write_text("\t".join(header.split())+"\n"+body, encoding="utf-8")
         subprocess.run([sys.executable, str(ROOT / "python/load_staging.py"),
                         "--database", args.database, "--data-dir", str(directory),
                         "--manifest", str(directory / "manifest.json")], check=True)
