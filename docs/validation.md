@@ -19,7 +19,7 @@ Fixture values are test expectations, not observations about IMDb. Saved profile
 
 `tests/run_import_integration.py` exercises the actual psql-based loader, seven generated TSVs, typed transformation, reporting views, reconciliation, repeat execution and all analysis scripts. It refuses an existing project database. A PostgreSQL 16 GitHub Actions service is configured in `.github/workflows/validate.yml`.
 
-**Configuration is not execution evidence.** Inspect the corresponding GitHub check result. At the time of this document's initial preparation, that remote check had not run. This section will be updated if a result is observed.
+**Passed on 30 October 2026:** [native PostgreSQL 16 integration run](https://github.com/niharkreddy-hub/imdb-analysis-pipeline/actions/runs/40980222815), code commit `d000d430d17c7c771737ce87dc03eb166582663b`. Both the seven Python tests and the actual psql import/transform/reconciliation/repeat-run/analysis step succeeded. This is synthetic-data integration evidence, not a full IMDb snapshot run.
 
 ## Still unverified
 

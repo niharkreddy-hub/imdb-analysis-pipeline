@@ -11,7 +11,7 @@ The repository now implements the complete staging-to-core transformation, expli
 | Data model | [ER diagram](docs/er_diagram.md), [design decisions](docs/data_model.md), [data dictionary](docs/data_dictionary.md) | 7 staging and 13 core tables |
 | Import | [TSV validator and loader](python/load_staging.py) | Header/width/encoding checks, hashes and atomic staging load |
 | Transformation | [Complete SQL load](sql/03_transform.sql) | All 13 core tables; tested with synthetic fixtures |
-| Validation | [Reconciliation SQL](sql/05_validate.sql), [test evidence and limits](docs/validation.md) | Synthetic SQL and parser checks passed; full-data run pending |
+| Validation | [Reconciliation SQL](sql/05_validate.sql), [test evidence and limits](docs/validation.md) | Python, PGlite SQL and native PostgreSQL 16 fixture checks passed; full-data run pending |
 | Analysis | [Content](sql/analysis/content.sql), [people](sql/analysis/people.sql), [ratings](sql/analysis/ratings.sql), [series](sql/analysis/series.sql) | Queries execute on fixtures; corrected series grouping and added actor/correlation analysis |
 | Power BI | [Reporting views](sql/04_reporting_views.sql), [build guide](powerbi/README.md), [DAX measures](powerbi/measures.dax) | Sources prepared; saved report, screenshots and URL pending |
 | Findings | Validated snapshot-specific outputs and interpretation | Pending; fixture values are not IMDb findings |
@@ -146,7 +146,7 @@ createdb imdb_test
 python3 tests/run_import_integration.py --database imdb_test
 ```
 
-The test refuses databases with existing project schemas. It generates synthetic TSVs from fixtures, runs the actual Python/psql loader, transforms, reconciles and executes the analysis. The [GitHub Actions workflow](.github/workflows/validate.yml) provides a PostgreSQL 16 service for this test; inspect the actual check result rather than assuming a configured workflow passed.
+The test refuses databases with existing project schemas. It generates synthetic TSVs from fixtures, runs the actual Python/psql loader, transforms, reconciles and executes the analysis. The [GitHub Actions workflow](.github/workflows/validate.yml) provides a PostgreSQL 16 service for this test. The [recorded native integration run passed](https://github.com/niharkreddy-hub/imdb-analysis-pipeline/actions/runs/40980222815) using synthetic data.
 
 ## Optional profiling and historical observations
 
