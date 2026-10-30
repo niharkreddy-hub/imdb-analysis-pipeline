@@ -2,7 +2,7 @@
 -- Ratings Analysis
 -- =============================================================================
 -- Queries analyzing IMDb user ratings: distributions, correlations,
--- and the relationship between popularity (votes) and quality (rating).
+-- and the relationship between popularity (votes) and audience rating.
 -- =============================================================================
 
 SET search_path TO core, public;
@@ -23,7 +23,7 @@ ORDER BY rating_floor;
 
 -- -----------------------------------------------------------------------------
 -- Q2: Vote count bucketing — do more-voted titles rate higher?
--- Tests the hypothesis that popular titles earn higher ratings.
+-- Describes an association; this query is not a statistical hypothesis test.
 -- -----------------------------------------------------------------------------
 SELECT
     CASE
@@ -46,8 +46,8 @@ ORDER BY vote_bucket;
 
 -- -----------------------------------------------------------------------------
 -- Q3: Top 25 highest-rated movies (min 50,000 votes)
--- The IMDb "best movies" list. High vote threshold ensures
--- these are genuinely popular, not obscure cult films.
+-- A project ranking using a declared 50K-vote threshold, not IMDb Top 250.
+-- The threshold limits low-vote titles; it does not eliminate selection bias.
 -- -----------------------------------------------------------------------------
 SELECT
     t.primary_title,
@@ -97,15 +97,33 @@ ORDER BY avg_rating DESC;
 
 -- -----------------------------------------------------------------------------
 -- Q6: Weighted average rating vs simple average
--- IMDb uses a weighted formula. How does it compare to a simple mean?
--- This query computes both for comparison.
+-- Compares a mean across title ratings with a vote-weighted mean across titles.
+-- This does not reproduce IMDb’s internal per-title weighting algorithm.
 -- -----------------------------------------------------------------------------
 SELECT
     ROUND(AVG(average_rating)::NUMERIC, 4)              AS simple_avg,
     ROUND(
         SUM(average_rating * num_votes)::NUMERIC /
         NULLIF(SUM(num_votes), 0), 4
-    )                                                   AS weighted_avg,
+    )                                                   AS vote_weighted_title_rating,
     SUM(num_votes)                                      AS total_votes,
     COUNT(*)                                            AS total_rated_titles
 FROM title_rating;
+
+-- Q7: Lowest-rated movies using the same 50K-vote threshold as Q3.
+SELECT t.tconst, t.primary_title, t.start_year, r.average_rating, r.num_votes
+FROM title t JOIN title_rating r USING (tconst)
+WHERE t.title_type = 'movie' AND r.num_votes >= 50000
+ORDER BY r.average_rating, r.num_votes DESC, t.tconst
+LIMIT 25;
+
+-- Q8: Pearson correlation, stratified by title type.
+-- Each title is one observation. Includes raw votes and ln(votes) for skew.
+-- Null correlation means too few observations or zero variance. No causal claim.
+SELECT t.title_type, COUNT(*) AS rated_titles,
+       CORR(r.num_votes::DOUBLE PRECISION, r.average_rating::DOUBLE PRECISION) AS votes_rating_correlation,
+       CORR(LN(r.num_votes::DOUBLE PRECISION), r.average_rating::DOUBLE PRECISION) AS log_votes_rating_correlation
+FROM title t JOIN title_rating r USING (tconst)
+WHERE r.num_votes > 0
+GROUP BY t.title_type
+ORDER BY rated_titles DESC;

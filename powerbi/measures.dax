@@ -1,0 +1,32 @@
+// Create each measure separately in Power BI. Table names must match the build guide.
+// These definitions are prepared for implementation; not yet verified in a saved report.
+
+Title Count = COUNTROWS('Titles')
+
+Rated Titles = COUNT('Titles'[average_rating])
+
+Rating Coverage = DIVIDE([Rated Titles], [Title Count])
+
+Mean Title Rating = AVERAGE('Titles'[average_rating])
+
+Total Title Votes = SUM('Titles'[num_votes])
+
+Vote Weighted Title Rating =
+DIVIDE(
+    SUMX('Titles', 'Titles'[average_rating] * 'Titles'[num_votes]),
+    [Total Title Votes]
+)
+
+Genre Title Count = DISTINCTCOUNT('TitleGenres'[tconst])
+
+Observed Episodes = COUNTROWS('Episodes')
+
+Rated Episodes = COUNT('Episodes'[average_rating])
+
+Mean Episode Rating = AVERAGE('Episodes'[average_rating])
+
+Episode Rating Coverage = DIVIDE([Rated Episodes], [Observed Episodes])
+
+// Votes are title-vote totals; the same IMDb user can contribute to multiple titles.
+// Mean Title Rating ignores unrated titles. It is not IMDb's internal rating formula.
+// Never compute a series mean by averaging pre-aggregated season means.

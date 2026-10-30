@@ -1,87 +1,59 @@
-# Data Model — Design Decisions
+# Data model and transformation decisions
 
-This document captures the design rationale behind the `core` schema. Read alongside `er_diagram.md`.
+The model separates raw staging, a constrained analytical core, ETL auditing and reporting views. See the [core ER diagram](er_diagram.md) and [data dictionary](data_dictionary.md).
 
-## Modeling Philosophy
+## Table inventory and grain
 
-The core schema is **3rd Normal Form (3NF)**. Every multi-valued attribute (comma-separated lists in the source data) is normalized into a junction table. Lookups are factored out into their own small tables. Foreign keys are strictly enforced.
+`staging` has seven text tables matching source field order. The strict loader validates TSV structure before importing; `\N` becomes SQL NULL. The transformation also accepts literal `\N` values from older imports.
 
-This was chosen over flat denormalization or a star schema because:
+The 13 `core` tables are:
 
-- 3NF demonstrates relational modeling competence to evaluators.
-- Junction tables enable indexed many-to-many queries (e.g., all action films directed by Tarantino).
-- Strict FK enforcement catches data quality issues immediately rather than letting them propagate.
-- Denormalized BI views can be layered on top for Power BI in Phase 6 without polluting the core.
+| Role | Tables | Grain |
+|---|---|---|
+| Entities | `title`, `person` | One row per `tconst` / `nconst` |
+| Lookups | `genre`, `profession` | One row per distinct accepted label |
+| Dependants | `title_rating`, `title_episode`, `title_aka` | Rated title; episode; title and alternate-title ordering |
+| Relationships | `title_genre`, `title_director`, `title_writer`, `person_profession`, `person_known_for` | One row per unique relationship |
+| Principal credit | `title_principal` | Title and principal ordering, with person and role attributes |
 
-## Two-Schema Architecture
+The design follows normalization principles for the five comma-separated relationship fields. It is not strictly atomic everywhere: `characters` intentionally remains a JSONB array, and alternate-title `types`/`attributes` remain lossless source text. `reporting.aka_types` splits `types` on ASCII 0x02 without modifying the source. Further normalization is possible if those attributes become central to analysis.
 
-The database has two schemas:
+Separate rating rows distinguish an unrated title from a zero rating. Episode relationships reference `title` twice: the episode itself and its parent series. Names are display labels, not identifiers; same-named series and people stay distinct.
 
-- **`staging`** — 7 tables, every column TEXT, no constraints. Mirrors the raw TSV files exactly. Loaded via `\copy`.
-- **`core`** — 13 tables, full constraints. Populated from staging via SQL transformations in Phase 4.
+## Refresh behaviour
 
-This pattern is standard in ETL pipelines. Loading directly into `core` would mean any data anomaly aborts a multi-gigabyte import. Staging absorbs all anomalies; the staging-to-core transform handles them explicitly with documented rules.
+`03_transform.sql` holds a stable staging snapshot using table locks, validates required inputs, then rebuilds all core tables in one transaction. Failure rolls the core changes back. Staging remains unchanged. Use this workflow only in the dedicated project database; it is a full-snapshot rebuild, not an incremental-update service.
 
-## Table Inventory
+Duplicate valid entity keys abort the refresh. Set-valued arrays use distinct relationships, so repeated genre/director tokens do not multiply counts. Lookup IDs are regenerated deterministically for one unchanged snapshot, but can shift across snapshots; BI should use stable source identifiers and genre/profession names.
 
-13 tables in `core`, organized by role:
+The schema creation scripts expect an empty database. Existing-schema migration is outside this workflow. Constraints/indexes remain enabled during inserts for simplicity and integrity; full-volume load performance has not been measured or optimized.
 
-- **Strong entities (2):** `title`, `person`
-- **Lookup tables (2):** `genre`, `profession`
-- **Dependent tables (3):** `title_rating`, `title_episode`, `title_aka`
-- **Junction tables (6):** `title_genre`, `title_director`, `title_writer`, `title_principal`, `person_known_for`, `person_profession`
+## Validation and rejection policy
 
-## Key Design Decisions
+`etl.rejects` stores the latest successful refresh's rejected source row or split token, source identifier and first detected reason. A record can have additional issues beyond its recorded first reason. `etl.load_summary` records source/core table counts and the load transaction time.
 
-### Why `title_rating` is a separate table
-Only ~13% of titles are rated. Merging rating columns into `title` would mean 87% of rows have NULL `average_rating` and NULL `num_votes`. Splitting reduces table width and isolates frequently-updated rating data from rarely-changing title data.
+| Condition | Handling |
+|---|---|
+| Missing required IDs/names, invalid adult flags, unknown title/category values | Quarantine the source row with a reason |
+| Unknown optional year/runtime/season/episode | Keep NULL; never replace missing with zero |
+| Non-integer, negative or out-of-range numeric fields | Quarantine; no silent overflow or coerced rounding |
+| Years | Accept 0–9999; retain plausible historical/future values rather than inventing a cutoff tied to today's date |
+| Runtime | Accept nonnegative INTEGER values; visual-specific exclusions must be declared separately |
+| Ratings | Require 1.0–10.0 with at most one decimal place; votes must be a nonnegative INTEGER |
+| Characters | Require NULL or a valid JSON array of strings |
+| Missing referenced title/person | Quarantine the link/dependant; preserve source IDs; do not fabricate people |
+| Episodes | Require an episode title and a series/mini-series parent, distinct IDs and nonnegative optional numbering |
+| Genre/profession arrays | Trim tokens, reject empty/overlength tokens, normalize accepted tokens and deduplicate links |
+| Duplicate valid primary keys | Fail and roll back rather than choose arbitrarily |
 
-### Why `title_episode` is a separate table
-Only ~77% of titles are episodes. The 23% that aren't would have NULL `season_number`, NULL `episode_number`, NULL `parent_tconst`. The separate table also enables clean self-referencing FK from episode-tconst to parent-tconst.
+Invalid optional values reject the row so that errors remain visible; this intentionally trades some coverage for explicit typed integrity. Inspect rejected rows before deciding whether a new source category or valid domain case requires a model change. Some dependent rows may be rejected because their parent failed validation.
 
-### Why three separate junction tables (director, writer, principal)?
-Each represents a semantically different relationship. Director and writer are simple links. Principal includes role metadata (category, job, characters). Merging would require a `role_type` discriminator column and conditional NULLs — uglier than three clean tables.
+The six direct mappings reconcile staging count = loaded count + rejected count. Bridge outputs have different grains from source rows, so inspect both relationship counts and token-level rejection reasons. Never sum rejected tokens and rejected titles as one loss rate.
 
-### Why `title_principal` uses composite PK `(tconst, ordering)` not surrogate?
-IMDb's `ordering` represents cast billing order (1 = top-billed). It carries semantic meaning. A `SERIAL principal_id` would add a column that no query needs. Composite PK is both compact and meaningful.
+## Reporting and interpretation
 
-### Why `genre` and `profession` are lookups but `region`/`language` are not?
-Genres and professions repeat millions of times across junctions. A 4-byte `genre_id` is far smaller than the 5-character string `'Drama'`. Plus, renaming genres would touch one row.
+`reporting.titles` left-joins ratings at one row per title. Genre and actor-credit bridges stay separate to prevent duplicate title/vote totals. `reporting.episodes` includes unrated episodes and both episode/series IDs; `reporting.season_ratings` exposes observed and rated episode counts plus an unweighted episode-rating mean for regular seasons only.
 
-`region` and `language` in `title_aka` are 2-letter ISO codes — already small. A `region` lookup would only let us join to a `country_name` we don't have. Not worth the complexity.
+Indexes cover title type/year/runtime, ratings/votes, episode parents, alternate-title region/language and reverse relationship lookups. Their existence is not evidence of a measured speed improvement.
 
-### Why `characters` is JSONB and not a junction table?
-The quirks investigation confirmed `characters` is 100% valid JSON. Storing as JSONB enables in-place queries with `jsonb_array_elements_text(characters)`. A junction table `title_principal_character(tconst, ordering, character_name)` would be technically more normalized but adds query complexity for marginal benefit. The data is already nested by IMDb; we preserve that structure.
-
-### Why FK constraints are strict (not `NOT VALID`)?
-The quirks investigation found only 0.00% orphan rate (2 orphans in 1M sampled directors). The 2 orphan nconsts are inserted as stubs (`primary_name = '[UNKNOWN]'`) before the directors load, allowing strict FK enforcement everywhere. This is a stronger schema than tolerating orphans via `NOT VALID`.
-
-### Why `ON DELETE CASCADE` on FK to title?
-If a title is deleted, its ratings, episodes, akas, and junction entries should also disappear. There's no scenario where keeping orphan child rows makes sense.
-
-### Why `ON DELETE RESTRICT` on FK to lookups?
-A genre or profession should never be deleted while still in use. Restricting the delete enforces that lookup table integrity.
-
-### Why CHECK constraints on enumerated columns?
-`title_type` and `category` have small fixed value sets (11 and 13 distinct values). CHECK constraints prevent any row with an unexpected value from being inserted. If IMDb adds a new title_type in a future data refresh, the load fails loudly — exactly what we want.
-
-## Data Quality Decisions Reflected in the Schema
-
-These design choices implement decisions made during Phase 1's data quality investigation:
-
-- **isAdult corruption (487 rows):** `core.title.is_adult` is `NOT NULL BOOLEAN`. The 487 corrupt rows are filtered out by the staging-to-core transform.
-- **Year/runtime outliers (small counts):** Retained. CHECK constraints only enforce non-negative runtime; future-dated and pre-1700 birth years are valid data.
-- **`\x02` separator in akas.types:** The column is stored as TEXT in `title_aka`. Splitting on `\x02` happens in analytical queries, not in the schema.
-- **Orphan nconsts (2 found):** Inserted as `[UNKNOWN]` stubs in `person` before the director/writer/principal loads to maintain strict FK integrity.
-- **Genre normalization:** 28 distinct genres confirmed by quirks investigation. Pre-populated in the `genre` table during the load.
-
-## Indexes
-
-Primary keys auto-create unique indexes. Additional indexes are defined for:
-
-- Filtering: `title.title_type`, `title.start_year`
-- Ordering: `title_rating.average_rating`, `title_rating.num_votes`
-- Reverse junction lookups: `title_director.nconst`, `title_writer.nconst`, `title_principal.nconst`, etc.
-- Self-reference: `title_episode.parent_tconst`
-
-Indexes are created **after** the tables are defined but **before** data loads. This order is important: indexing during a bulk load is much slower than indexing the final populated table.
+The historical profile counts and proposed stub-person handling in older output are not current implementation guarantees. Current rules and validation limits are documented here and in [validation.md](validation.md); recheck the original source with the corrected parser before asserting corruption.

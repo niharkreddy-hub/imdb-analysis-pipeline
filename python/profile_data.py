@@ -8,6 +8,7 @@ Usage:
 """
 
 import argparse
+import csv
 import os
 from pathlib import Path
 
@@ -35,7 +36,8 @@ def profile_file(filepath, sample_size=None):
         "low_memory": False,
         "dtype": str,
         "encoding": "utf-8",
-        "on_bad_lines": "warn",
+        "on_bad_lines": "error",
+        "quoting": csv.QUOTE_NONE,
     }
     if sample_size:
         read_kwargs["nrows"] = sample_size
@@ -114,3 +116,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

@@ -7,6 +7,7 @@ Usage:
     python python/investigate_quirks.py
 """
 
+import csv
 import json
 import pandas as pd
 
@@ -24,6 +25,8 @@ def check_title_types():
     df = pd.read_csv(
         f"{DATA}/title.basics.tsv",
         sep="\t",
+        quoting=csv.QUOTE_NONE,
+        on_bad_lines="error",
         usecols=["titleType"],
         na_values=[r"\N"],
         keep_default_na=False,
@@ -34,11 +37,13 @@ def check_title_types():
     print(counts.to_string())
 
 
-def check_isadult_corruption():
-    section("CHECK 2: title.basics.isAdult - column shift corruption")
+def check_isadult_values():
+    section("CHECK 2: title.basics.isAdult - unexpected values (cause unverified)")
     df = pd.read_csv(
         f"{DATA}/title.basics.tsv",
         sep="\t",
+        quoting=csv.QUOTE_NONE,
+        on_bad_lines="error",
         usecols=["tconst", "isAdult"],
         na_values=[r"\N"],
         keep_default_na=False,
@@ -48,12 +53,12 @@ def check_isadult_corruption():
     corrupt = df[~valid_mask]
     print(f"Total rows: {len(df):,}")
     print(f"Rows with isAdult NOT in (0,1): {len(corrupt):,}")
-    print(f"Percentage corrupt: {100 * len(corrupt) / len(df):.4f}%")
-    print(f"\nDistinct corrupt values:")
+    print(f"Percentage unexpected: {100 * len(corrupt) / len(df):.4f}%")
+    print(f"\nDistinct unexpected values:")
     print(corrupt["isAdult"].value_counts().head(20).to_string())
-    print(f"\nSample corrupt tconsts (first 10):")
+    print(f"\nSample unexpected tconsts (first 10):")
     print(corrupt["tconst"].head(10).tolist())
-    print("\nDecision: drop these rows during staging-to-core load.")
+    print("\nReview original lines and parser behavior; invalid values are quarantined in etl.rejects.")
 
 
 def check_genres():
@@ -61,6 +66,8 @@ def check_genres():
     df = pd.read_csv(
         f"{DATA}/title.basics.tsv",
         sep="\t",
+        quoting=csv.QUOTE_NONE,
+        on_bad_lines="error",
         usecols=["genres"],
         na_values=[r"\N"],
         keep_default_na=False,
@@ -84,6 +91,8 @@ def check_year_outliers():
     df = pd.read_csv(
         f"{DATA}/title.basics.tsv",
         sep="\t",
+        quoting=csv.QUOTE_NONE,
+        on_bad_lines="error",
         usecols=["tconst", "startYear", "endYear", "runtimeMinutes"],
         na_values=[r"\N"],
         keep_default_na=False,
@@ -118,6 +127,8 @@ def check_birth_death_outliers():
     df = pd.read_csv(
         f"{DATA}/name.basics.tsv",
         sep="\t",
+        quoting=csv.QUOTE_NONE,
+        on_bad_lines="error",
         usecols=["nconst", "primaryName", "birthYear", "deathYear"],
         na_values=[r"\N"],
         keep_default_na=False,
@@ -145,6 +156,8 @@ def check_characters_json():
     df = pd.read_csv(
         f"{DATA}/title.principals.tsv",
         sep="\t",
+        quoting=csv.QUOTE_NONE,
+        on_bad_lines="error",
         usecols=["characters"],
         na_values=[r"\N"],
         keep_default_na=False,
@@ -179,6 +192,8 @@ def check_akas_separator():
     df = pd.read_csv(
         f"{DATA}/title.akas.tsv",
         sep="\t",
+        quoting=csv.QUOTE_NONE,
+        on_bad_lines="error",
         usecols=["types"],
         na_values=[r"\N"],
         keep_default_na=False,
@@ -205,6 +220,8 @@ def check_orphan_nconsts():
     names = pd.read_csv(
         f"{DATA}/name.basics.tsv",
         sep="\t",
+        quoting=csv.QUOTE_NONE,
+        on_bad_lines="error",
         usecols=["nconst"],
     )
     name_set = set(names["nconst"])
@@ -214,6 +231,8 @@ def check_orphan_nconsts():
     crew = pd.read_csv(
         f"{DATA}/title.crew.tsv",
         sep="\t",
+        quoting=csv.QUOTE_NONE,
+        on_bad_lines="error",
         usecols=["directors"],
         na_values=[r"\N"],
         keep_default_na=False,
@@ -237,6 +256,8 @@ def check_principal_categories():
     df = pd.read_csv(
         f"{DATA}/title.principals.tsv",
         sep="\t",
+        quoting=csv.QUOTE_NONE,
+        on_bad_lines="error",
         usecols=["category"],
         na_values=[r"\N"],
         keep_default_na=False,
@@ -250,7 +271,7 @@ def check_principal_categories():
 
 def main():
     check_title_types()
-    check_isadult_corruption()
+    check_isadult_values()
     check_genres()
     check_year_outliers()
     check_birth_death_outliers()

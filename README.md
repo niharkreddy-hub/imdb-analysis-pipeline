@@ -1,103 +1,67 @@
 # Data Analysis using IMDb Non-Commercial Datasets
 
-A learning project exploring data modelling, PostgreSQL database management, SQL analysis and Power BI visualisation using seven IMDb datasets.
+A learning project in relational modelling, PostgreSQL, SQL analysis and Power BI using seven IMDb datasets.
 
-The work covers the path from inspecting raw TSV files to designing a relational model, preparing data for analysis and communicating findings. The published repository currently contains profiling evidence, database definitions and SQL analysis scripts. The complete staging-to-core load and Power BI report assets still need to be added.
+The repository now implements the complete staging-to-core transformation, explicit rejection auditing, SQL analysis and reporting views. Synthetic-data checks exercise the pipeline and known failure cases. **A full IMDb snapshot run, verified analytical findings and the finished Power BI report are still pending.**
 
 ## Project status
 
-| Component | Evidence in this repository | Current status |
-| --- | --- | --- |
-| Dataset exploration | [Profiling script](python/profile_data.py), saved profiles in `docs/` and [targeted investigation](docs/quirks_investigation.txt) | Published |
-| Relational data model | [Design rationale](docs/data_model.md), [ER diagram](docs/er_diagram.md) and [data dictionary](docs/data_dictionary.md) | Published |
-| PostgreSQL setup | [7 staging tables](sql/02_staging.sql), [13 core tables](sql/01_schema.sql) and [setup record](docs/phase3_setup_complete.md) | Published |
-| Data cleaning and transformation | [Transformation script](sql/03_transform.sql) | Partial: currently populates the genre lookup only |
-| Exploratory SQL analysis | [Content](sql/analysis/content.sql), [people](sql/analysis/people.sql), [ratings](sql/analysis/ratings.sql) and [series](sql/analysis/series.sql) queries | Written; full reproduction requires the remaining data loads and validation |
-| Power BI report | Interactive report link and screenshots | Not yet published in this repository |
-| Analytical findings | Validated query outputs and interpretation | Still to be published |
+| Component | Evidence | Status |
+|---|---|---|
+| Data model | [ER diagram](docs/er_diagram.md), [design decisions](docs/data_model.md), [data dictionary](docs/data_dictionary.md) | 7 staging and 13 core tables |
+| Import | [TSV validator and loader](python/load_staging.py) | Header/width/encoding checks, hashes and atomic staging load |
+| Transformation | [Complete SQL load](sql/03_transform.sql) | All 13 core tables; tested with synthetic fixtures |
+| Validation | [Reconciliation SQL](sql/05_validate.sql), [test evidence and limits](docs/validation.md) | Python, PGlite SQL and native PostgreSQL 16 fixture checks passed; full-data run pending |
+| Analysis | [Content](sql/analysis/content.sql), [people](sql/analysis/people.sql), [ratings](sql/analysis/ratings.sql), [series](sql/analysis/series.sql) | Queries execute on fixtures; corrected series grouping and added actor/correlation analysis |
+| Power BI | [Reporting views](sql/04_reporting_views.sql), [build guide](powerbi/README.md), [DAX measures](powerbi/measures.dax) | Sources prepared; saved report, screenshots and URL pending |
+| Findings | Validated snapshot-specific outputs and interpretation | Pending; fixture values are not IMDb findings |
 
-## Objectives
+## Objective and data
 
-- Design a relational model with appropriate keys, data types and constraints.
-- Import the seven IMDb source files into PostgreSQL and handle missing values and multi-valued attributes.
-- Use SQL to explore content, contributors, audience ratings and television series.
-- Build an interactive Power BI report that explains the results and their limitations.
+Practise designing a relational database, cleaning and loading real-world data, querying it and communicating interpretable results. This is an academic portfolio project; no production deployment or business impact is claimed.
 
-## Data source
+Source: [IMDb Non-Commercial Datasets](https://data.imdb.com/non-commercial-datasets/). Download from [IMDb's dataset directory](https://datasets.imdbws.com/) under its linked non-commercial terms. Files are refreshed daily and contain UTF-8 TSV data with a header and `\N` null marker.
 
-Source: [IMDb Non-Commercial Datasets](https://developer.imdb.com/non-commercial-datasets/). Download the files from [IMDb's dataset directory](https://datasets.imdbws.com/).
+| File | Contents | Main identifiers |
+|---|---|---|
+| `title.basics.tsv.gz` | Title type, names, years, runtime, genres | `tconst` |
+| `title.akas.tsv.gz` | Alternative/localised titles | `titleId` = `tconst`, `ordering` |
+| `title.crew.tsv.gz` | Directors and writers | `tconst`, lists of `nconst` |
+| `title.episode.tsv.gz` | Episode-to-series links | `tconst`, `parentTconst` |
+| `title.principals.tsv.gz` | Selected principal cast/crew credits | `tconst`, `ordering`, `nconst` |
+| `title.ratings.tsv.gz` | Audience rating and votes | `tconst` |
+| `name.basics.tsv.gz` | People, professions, known-for titles | `nconst` |
 
-IMDb supplies UTF-8, gzipped, tab-separated files with a header row. The `\N` marker denotes a missing value. The source is refreshed daily, so row counts and results depend on the download date.
+Raw data, generated CSVs and PBIX files are excluded from GitHub. Keep source files from one download session together and record the download time.
 
-| Source file | Contents | Main identifiers |
-| --- | --- | --- |
-| `title.basics.tsv.gz` | Title type, names, years, runtime and genres | `tconst` |
-| `title.akas.tsv.gz` | Alternative and localised titles | `titleId` corresponds to `tconst`; `ordering` identifies each alternative |
-| `title.crew.tsv.gz` | Directors and writers | `tconst`; arrays of `nconst` values |
-| `title.episode.tsv.gz` | Episode-to-series relationships | Episode `tconst` and series `parentTconst` |
-| `title.principals.tsv.gz` | Principal cast and crew credits | `tconst`, `ordering`, `nconst` |
-| `title.ratings.tsv.gz` | Average audience rating and number of votes | `tconst` |
-| `name.basics.tsv.gz` | People, professions and known-for titles | `nconst`; arrays of `tconst` values |
+## Database model
 
-Obtain source data directly from IMDb and follow its linked non-commercial terms. Raw datasets are excluded from this repository.
+- `staging`: seven unconstrained text tables matching source column order.
+- `core`: 13 constrained tables with primary keys, foreign keys and indexes. Comma-separated genres, professions, directors, writers and known-for titles become junction rows.
+- `etl`: latest rejected rows/tokens and table-count audit. These are supporting tables, outside the 13-table core model.
+- `reporting`: views with explicit grains for Power BI. Title facts stay separate from genre/credit bridges to avoid double-counting.
 
-## Data model
+See the [full ER diagram](docs/er_diagram.md). JSON character arrays and alternative-title metadata are deliberate exceptions to fully atomic relational modelling; their handling is documented in [the model rationale](docs/data_model.md).
 
-The database separates raw input from the relational model:
+## Reproduce a full-data run
 
-- **`staging`** contains seven tables with text columns matching the source-file column order. It provides a place to inspect values before casting them.
-- **`core`** contains 13 tables for titles, people, ratings, episodes, alternative titles, genres, professions and their relationships.
+Requires PostgreSQL **16 or later**, its `psql`/`createdb` clients, Python 3 and a checkout of this repository. The loader uses only Python's standard library. Node/PGlite is optional for tests, and pandas is optional for profiling. Use a dedicated project database and allow substantial disk space for the decompressed files, staging, indexes and transaction logs. Full-volume runtime and memory usage have not been benchmarked.
 
-Junction tables represent many-to-many relationships such as titles and genres, or titles and directors. Primary keys, foreign keys and check constraints define the intended integrity rules. Indexes support common filters and joins; no measured performance improvement is claimed here.
+Run commands from the repository root.
 
-See the [complete ER diagram](docs/er_diagram.md), [column definitions](docs/data_dictionary.md) and [modelling decisions](docs/data_model.md).
+### 1. Download and inspect
 
-## Repository guide
-
-| Path | Purpose |
-| --- | --- |
-| `python/profile_data.py` | Column-level null counts, distinct values, distributions and sample inspection |
-| `python/investigate_quirks.py` | Targeted checks for field values, outliers, JSON and orphan references |
-| `python/requirements.txt` | Dependency versions recorded for the Python work |
-| `sql/02_staging.sql` | Staging table definitions |
-| `sql/01_schema.sql` | Core table definitions, constraints and indexes |
-| `sql/03_transform.sql` | Initial transformation step; remaining table loads are not implemented |
-| `sql/analysis/` | Exploratory queries grouped by topic |
-| `docs/` | Model documentation and saved profiling outputs |
-
-## Local setup
-
-Use PostgreSQL 16 with the `psql` client, Python 3 and a local checkout of this repository. Power BI is used for the visualisation component. Allow sufficient local disk space and memory for the downloaded files and database; the full datasets are large.
-
-These steps document the schema and staging workflow. They do not yet reproduce a complete analytical database. A clean installation of the recorded Python dependency pins has not been verified.
-
-### 1. Prepare the source files
-
-Download and decompress all seven `.tsv.gz` files into a local `data/` directory at the repository root. Retain the header row in each `.tsv` file and record the download date. Keep files from the same download session together.
-
-Run commands from the repository root so that the relative paths below resolve correctly.
-
-### 2. Prepare the Python environment
+Download and decompress all seven files into `data/`, retaining their headers. Keep these files unchanged during validation/import.
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r python/requirements.txt
+python3 python/load_staging.py --validate-only
 ```
 
-Profile one file, or inspect a limited prefix for an initial check:
+This streams each file once, validates the exact header, UTF-8, field count and unsupported control bytes, and writes `data/load_manifest.json` with SHA-256 hashes, byte sizes, row counts and validation time. **Validation time is not download time**: fill the separate download-time field from your own record; do not guess it. Each loader invocation rewrites this manifest, so add the download record to the final successful manifest and retain it with the source snapshot.
 
-```bash
-python python/profile_data.py data/title.basics.tsv
-python python/profile_data.py data/title.principals.tsv --sample 500000
-python python/investigate_quirks.py
-```
+Literal quotes, JSON and `NA` are preserved. An invalid line stops the run with its location; it is not silently skipped. Source files are not repaired automatically.
 
-`--sample` reads the first N records, not a random sample. Some investigation checks also read only a prefix. Interpret those results as observations about the inspected records, not guarantees about the whole dataset.
-
-### 3. Create a fresh local database and schemas
-
-Use a new database to avoid changing an existing project database:
+### 2. Create a fresh database
 
 ```bash
 createdb imdb_portfolio
@@ -105,100 +69,104 @@ psql -X -v ON_ERROR_STOP=1 -d imdb_portfolio -f sql/02_staging.sql
 psql -X -v ON_ERROR_STOP=1 -d imdb_portfolio -f sql/01_schema.sql
 ```
 
-The intended order is staging first, then core, despite the numeric filenames. The table-creation scripts expect a fresh database and are not general rerun scripts.
+The creation scripts expect a fresh database; run staging before core despite the numeric filenames. Existing schema users should test in a new database, not rerun creation over an old project.
 
-### 4. Load the raw files into staging
-
-Open `psql` from the repository root:
+### 3. Load staging
 
 ```bash
-psql -X -v ON_ERROR_STOP=1 -d imdb_portfolio
+python3 python/load_staging.py --database imdb_portfolio
 ```
 
-Run each `\copy` command as one line:
+The loader validates all seven files before touching the database, replaces all seven staging tables in one transaction, and reconciles imported counts before committing. A failed COPY rolls the transaction back. Credentials use normal PostgreSQL connection settings/environment or `.pgpass`; do not put them in repository files.
+
+Internally, COPY uses tab-delimited CSV mode with a backspace quote character, preserving ordinary title/JSON quotes and converting the exact `\N` sentinel. The validator rejects backspace bytes so they cannot be interpreted as quotes. See [PostgreSQL COPY options](https://www.postgresql.org/docs/16/sql-copy.html).
+
+### 4. Transform, reconcile and expose report views
+
+```bash
+psql -X -v ON_ERROR_STOP=1 -d imdb_portfolio -f sql/03_transform.sql
+psql -X -v ON_ERROR_STOP=1 -d imdb_portfolio -f sql/05_validate.sql
+psql -X -v ON_ERROR_STOP=1 -d imdb_portfolio -f sql/04_reporting_views.sql
+```
+
+`03_transform.sql` **replaces the project's core tables and latest ETL audit** within one transaction. It locks staging against changes during the transformation, checks that all seven inputs are nonempty, loads parents before dependants and rebuilds lookup/junction tables. Rerunning the same snapshot produces the same logical content. Surrogate genre/profession IDs are internal to the snapshot and must not be used as permanent external identifiers.
+
+Invalid source rows and unresolved links are preserved in `etl.rejects` with a source, key, reason and raw values. Source person names are not fabricated. Duplicate valid primary keys cause an error and roll back the refresh rather than selecting an arbitrary record. Inspect errors, fix the source/import issue and rerun. The pipeline does not establish that every plausible value is factually correct.
+
+Review the latest audit:
 
 ```sql
-\copy staging.title_basics FROM 'data/title.basics.tsv' WITH (FORMAT csv, DELIMITER E'\t', HEADER true, NULL '\N', QUOTE E'\b', ENCODING 'UTF8');
-\copy staging.title_akas FROM 'data/title.akas.tsv' WITH (FORMAT csv, DELIMITER E'\t', HEADER true, NULL '\N', QUOTE E'\b', ENCODING 'UTF8');
-\copy staging.title_crew FROM 'data/title.crew.tsv' WITH (FORMAT csv, DELIMITER E'\t', HEADER true, NULL '\N', QUOTE E'\b', ENCODING 'UTF8');
-\copy staging.title_episode FROM 'data/title.episode.tsv' WITH (FORMAT csv, DELIMITER E'\t', HEADER true, NULL '\N', QUOTE E'\b', ENCODING 'UTF8');
-\copy staging.title_principals FROM 'data/title.principals.tsv' WITH (FORMAT csv, DELIMITER E'\t', HEADER true, NULL '\N', QUOTE E'\b', ENCODING 'UTF8');
-\copy staging.title_ratings FROM 'data/title.ratings.tsv' WITH (FORMAT csv, DELIMITER E'\t', HEADER true, NULL '\N', QUOTE E'\b', ENCODING 'UTF8');
-\copy staging.name_basics FROM 'data/name.basics.tsv' WITH (FORMAT csv, DELIMITER E'\t', HEADER true, NULL '\N', QUOTE E'\b', ENCODING 'UTF8');
+SELECT * FROM etl.load_summary ORDER BY table_name;
+SELECT source_table, reason, COUNT(*) AS rejected_rows_or_tokens
+FROM etl.rejects
+GROUP BY source_table, reason ORDER BY source_table, reason;
 ```
 
-CSV mode is configured with a tab delimiter and a backspace quote character so ordinary double quotes in titles and JSON are preserved. This assumes the files contain no backspace quoting. Validate parsing on the downloaded snapshot before treating a shifted field as a source-data defect. See [PostgreSQL COPY documentation](https://www.postgresql.org/docs/16/sql-copy.html) for the import options.
+Row rejections and split-token rejections have different units. A successful validation reconciles source/loaded/rejected rows for the six directly mapped tables and confirms validated core constraints; it does **not** mean all source data was accepted. Review rejection reasons before publishing analysis. The audit represents the latest successful refresh; export it if historical runs must be retained.
 
-These commands append records. Run them once against empty staging tables. Record each `COPY` row count, compare it with the source-file record count, and inspect sample rows, nulls and key columns before proceeding.
-
-### 5. Transform and validate
-
-The current `sql/03_transform.sql` only inserts distinct genres into `core.genre`. It does not yet populate titles, people, ratings, episodes, alternative titles or the junction tables. Do not treat it as a complete ETL pipeline.
-
-Remaining work includes typed casts, array splitting, referential-integrity handling and a documented approach to invalid records. Resolve parent records before dependent records, preserve rejected rows with reasons, and check row counts and key integrity after each load. The genre insert is also not safe to rerun unchanged against an already populated lookup.
-
-## SQL analysis
-
-Once the required core tables are populated and validated, the analysis scripts address:
-
-| Script | Questions and metrics |
-| --- | --- |
-| [Content](sql/analysis/content.sql) | Title-type counts, genre distribution, runtime buckets, production by year and average rating by genre |
-| [People](sql/analysis/people.sql) | Prolific directors and writers, highly rated directors, director/writer credits and profession distribution |
-| [Ratings](sql/analysis/ratings.sql) | Rating distribution, vote-count buckets, top-rated titles, most-voted titles and average ratings by title type |
-| [Series](sql/analysis/series.sql) | Top series and episodes, episode counts, season averages and changes across seasons |
-
-For example, after completing the required loads:
+### 5. Run and capture analysis
 
 ```bash
-psql -X -v ON_ERROR_STOP=1 -d imdb_portfolio -f sql/analysis/content.sql
+mkdir -p reports
+psql -X -v ON_ERROR_STOP=1 -P pager=off -d imdb_portfolio -f sql/analysis/content.sql > reports/content.txt
+psql -X -v ON_ERROR_STOP=1 -P pager=off -d imdb_portfolio -f sql/analysis/people.sql > reports/people.txt
+psql -X -v ON_ERROR_STOP=1 -P pager=off -d imdb_portfolio -f sql/analysis/ratings.sql > reports/ratings.txt
+psql -X -v ON_ERROR_STOP=1 -P pager=off -d imdb_portfolio -f sql/analysis/series.sql > reports/series.txt
 ```
 
-Suggested extensions from the brief include actor rankings and lowest-rated titles. Vote-count buckets currently support a descriptive comparison; a correlation coefficient would provide an additional analysis of the vote/rating relationship.
+| Script | Questions and definitions |
+|---|---|
+| Content | Title-type/genre counts, movie runtime buckets, fixed 1994–2024 movie-title comparison and ratings by genre. Genre counts overlap. |
+| People | Prolific directors/writers, rated-director cohorts, both-role credits, professions and actors by distinct movie credits. Principal credits are not the full cast. |
+| Ratings | Distributions, vote buckets, highest/lowest rated movies at >=50K votes, title-type means and Pearson correlation using both votes and log votes. |
+| Series | Top series/episodes, observed regular-season counts, season means and first-to-last observed rated season change. Series are grouped by ID; season 0 is excluded from regular-season trends. |
 
-Before reporting season trends, update Series Q3 to group by the unique series identifier as well as the display title. Grouping only by `primary_title` can merge distinct shows with the same name. Review how specials, missing seasons, vote thresholds and unrated episodes affect the other series metrics.
+Thresholds are project choices, not significance guarantees or official IMDb rankings. Ratings are audience opinions; vote counts are not unique viewers. Correlation does not imply causation. A vote-weighted mean across title ratings does not reconstruct IMDb's internal per-title rating formula. The last observed rated season may not be a show's final season.
 
-## Power BI report
+## Power BI
 
-**Report link and screenshots are not yet available in this repository.** No live report or dashboard result is implied by the SQL scripts.
+Follow the [three-page build guide](powerbi/README.md) for Content & Coverage, Ratings & Votes, and Series & Seasons. It specifies table grains, relationships, measures, filter behaviour and SQL reconciliation checks.
 
-The report is intended to contain:
+**No completed Power BI report, report URL or screenshots are claimed yet.** Add the genuine report link and screenshots only after refreshing from the validated source and checking the intended viewer's access. Finish with three findings stating the population, filters, values and limitations. Do not use synthetic fixtures as portfolio results.
 
-- A content overview with title types, genres and runtime distributions.
-- Audience-rating and vote-count comparisons with clearly explained thresholds.
-- Contributor and television-series views supported by validated queries.
-- Filters for relevant dimensions such as title type, genre and year.
+## Tests and evidence
 
-When the report assets are available, add an interactive viewing link and screenshots here, followed by three findings that identify the metric, population, filters and limitations. Test the report link as an intended external viewer. Keep a static preview available alongside the interactive report.
+```bash
+python3 -m unittest discover -s tests -p 'test_*.py' -v
+npm ci
+npm test
+```
 
-The current `.gitignore` excludes `.pbix` and CSV files. A report URL and PNG screenshots can be added without changing that rule.
+Python tests check TSV boundary cases. The optional PGlite suite executes PostgreSQL SQL on synthetic data, checks all 13 core tables, import parsing, analysis results, repeat refresh and rollback on bad inputs. See [validation details](docs/validation.md) for what was actually run and what remains unverified.
 
-## Data quality observations and limitations
+For a native PostgreSQL integration test, create a separate empty database:
 
-The [saved investigation output](docs/quirks_investigation.txt) records 487 unexpected `isAdult` values in 12,479,598 parsed title records, unusual alternative-title separators, runtime/year outliers and orphan-reference checks. These are observations from that saved run; the source snapshot date and file hashes still need recording.
+```bash
+createdb imdb_test
+python3 tests/run_import_integration.py --database imdb_test
+```
 
-Confirm the original records and parser behaviour before attributing anomalies to IMDb. The existing investigation's printed suggestion to drop records is a proposed handling rule, not evidence that the full filtering step was implemented.
+The test refuses databases with existing project schemas. It generates synthetic TSVs from fixtures, runs the actual Python/psql loader, transforms, reconciles and executes the analysis. The [GitHub Actions workflow](.github/workflows/validate.yml) provides a PostgreSQL 16 service for this test. The [recorded native integration run passed](https://github.com/niharkreddy-hub/imdb-analysis-pipeline/actions/runs/40980222815) using synthetic data.
 
-Additional limits:
+## Optional profiling and historical observations
 
-- Current scripts do not reproduce the complete database load from a fresh checkout.
-- Analytical query outputs, dashboard screenshots and final findings are not published here.
-- IMDb coverage and user votes do not represent the entire viewing audience. Associations between votes and ratings do not establish causation.
-- A vote-weighted average across title ratings is a project-defined summary, not a reconstruction of IMDb's title-rating algorithm.
+The existing [profiling script](python/profile_data.py) and [targeted investigation](python/investigate_quirks.py) use pandas. Their original dependency pins are in `python/requirements.txt`; a clean installation of those legacy pins has not been verified. `--sample` means the first N records, not a random sample; some investigations also inspect only prefixes. Full-file profiling can use substantial memory.
 
-## Completion checklist
+The saved `docs/profile_*.txt` and `docs/quirks_investigation.txt` are historical outputs without source hashes/dates. The older parser treated double quotes as CSV syntax. It has been changed to preserve quotes and fail on bad lines. **The saved claim of 487 unexpected `isAdult` values needs revalidation against the original source; its cause has not been established.** Do not label it confirmed IMDb corruption or a verified cleaning outcome.
 
-- [ ] Record dataset snapshot dates, file hashes and row counts.
-- [ ] Complete staging-to-core transformations and rejected-record handling.
-- [ ] Verify counts, unique keys and foreign-key relationships after loading.
-- [ ] Correct series grouping and validate query outputs.
-- [ ] Consider extending the analysis with actor rankings, lowest-rated titles and a defined vote/rating correlation measure.
-- [ ] Build the Power BI report and publish its permitted viewing link and screenshots.
-- [ ] Write findings with their definitions, filters and limitations.
-- [ ] Verify the documented workflow in a fresh local environment.
+## Remaining completion work
+
+- [x] Implement transformations, rejection audit and repeatable refresh.
+- [x] Fix series grouping and add actor, lowest-rating and correlation analysis.
+- [x] Execute synthetic SQL/parser checks and prepare native integration tests.
+- [x] Prepare Power BI source views, measures and build instructions.
+- [ ] Run against a dated, hashed full IMDb snapshot on native PostgreSQL and review rejections.
+- [ ] Record query outputs and validate interpretation against the loaded population.
+- [ ] Build and verify the Power BI report; add genuine screenshots and a working viewing link.
+- [ ] Publish three defensible findings with filters and limitations.
 
 ## Author
 
 Nihar Reddy Kumbham
 
-[GitHub profile](https://github.com/niharkreddy-hub) | [LinkedIn](https://www.linkedin.com/in/nihar-reddy-kumbham-73a47a216/)
+[GitHub](https://github.com/niharkreddy-hub) | [LinkedIn](https://www.linkedin.com/in/nihar-reddy-kumbham-73a47a216/)
