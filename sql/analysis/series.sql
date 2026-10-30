@@ -35,7 +35,7 @@ SELECT
     t.start_year,
     t.end_year,
     COUNT(te.tconst)    AS total_episodes,
-    MAX(te.season_number) AS seasons
+    COUNT(DISTINCT te.season_number) FILTER (WHERE te.season_number > 0) AS observed_regular_seasons
 FROM title t
 JOIN title_episode te ON te.parent_tconst = t.tconst
 WHERE t.title_type IN ('tvSeries', 'tvMiniSeries')
@@ -56,26 +56,26 @@ WITH top_series AS (
     JOIN title_rating tr ON tr.tconst = t.tconst
     WHERE t.title_type = 'tvSeries'
       AND tr.num_votes >= 50000
-    ORDER BY tr.average_rating DESC
+    ORDER BY tr.average_rating DESC, tr.num_votes DESC, t.tconst
     LIMIT 20
 ),
 season_ratings AS (
     SELECT
+        ts.tconst AS series_id,
         ts.primary_title,
         te.season_number,
-        COUNT(te.tconst)                            AS episodes,
+        COUNT(te.tconst)                            AS rated_episodes,
         ROUND(AVG(tr.average_rating)::NUMERIC, 2)   AS avg_season_rating,
         SUM(tr.num_votes)                           AS season_votes
     FROM top_series ts
     JOIN title_episode te ON te.parent_tconst = ts.tconst
     JOIN title_rating tr ON tr.tconst = te.tconst
-    WHERE te.season_number IS NOT NULL
-      AND te.season_number <= 20
-    GROUP BY ts.primary_title, te.season_number
+    WHERE te.season_number > 0
+    GROUP BY ts.tconst, ts.primary_title, te.season_number
 )
 SELECT *
 FROM season_ratings
-ORDER BY primary_title, season_number;
+ORDER BY primary_title, series_id, season_number;
 
 
 -- -----------------------------------------------------------------------------
@@ -102,8 +102,9 @@ LIMIT 25;
 -- -----------------------------------------------------------------------------
 -- Q5: Series rating decline/improvement metric
 -- Which series improved or declined the most across their run?
--- Compares first season avg rating to last season avg rating.
--- Requires at least 3 seasons.
+-- Compares season 1 with the last observed rated regular season.
+-- Episode ratings are equally weighted; this does not prove a completed series run.
+-- Requires at least 3 observed rated regular seasons; season 0 is excluded.
 -- -----------------------------------------------------------------------------
 WITH season_avgs AS (
     SELECT
@@ -112,7 +113,7 @@ WITH season_avgs AS (
         ROUND(AVG(tr.average_rating)::NUMERIC, 2) AS season_avg
     FROM title_episode te
     JOIN title_rating tr ON tr.tconst = te.tconst
-    WHERE te.season_number IS NOT NULL
+    WHERE te.season_number > 0
     GROUP BY te.parent_tconst, te.season_number
 ),
 series_trajectory AS (
@@ -129,6 +130,7 @@ series_trajectory AS (
     HAVING COUNT(DISTINCT season_number) >= 3
 )
 SELECT
+    t.tconst AS series_id,
     t.primary_title,
     st.total_seasons,
     st.s1_rating,

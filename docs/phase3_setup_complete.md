@@ -1,6 +1,8 @@
-# Phase 3 — Database Setup
+# Phase 3 — Historical Database Setup Record
 
-Completed setup tasks:
+This is the original local setup note. It is not evidence that the new full-data pipeline has been run. For the current reproducible workflow and verification limits, see the root README and `docs/validation.md`.
+
+Previously recorded setup tasks:
 
 - PostgreSQL 16 installed via Homebrew
 - Service started via `brew services start postgresql@16`
@@ -10,3 +12,4 @@ Completed setup tasks:
 - DBeaver Community Edition installed for GUI browsing
 
 Database connection: `psql imdb` from terminal, or DBeaver localhost:5432.
+

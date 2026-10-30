@@ -1,0 +1,6 @@
+{
+  "name": "imdb-pipeline-sql-checks",
+  "private": true,
+  "scripts": {"test": "node tests/run_smoke.mjs"},
+  "devDependencies": {"@electric-sql/pglite": "0.5.13"}
+}

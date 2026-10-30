@@ -1,5 +1,7 @@
 # IMDb Data Dictionary
 
+> Historical profiling figures below describe saved runs without recorded source hashes. They have not been revalidated with the corrected TSV parser. Current transformation rules are in `sql/03_transform.sql`; inspect `etl.rejects` for the current snapshot.
+
 This document describes every column across all seven IMDb non-commercial datasets used in this project, including types, nullability, observed ranges, and known data quality issues.
 
 **Source:** https://datasets.imdbws.com/
@@ -37,7 +39,7 @@ Core attributes for every title (movie, TV series, episode, etc.) registered in 
 | titleType | string | VARCHAR(20) | No | Categorical, 11 distinct values (see below). |
 | primaryTitle | string | TEXT | No | The "more popular" title, often the English-market name. May contain Unicode, embedded quotes, commas. |
 | originalTitle | string | TEXT | No | Original-language title. Mostly identical to primaryTitle. |
-| isAdult | "0" or "1" | BOOLEAN | No | Stored as text. **Has 487 corrupt rows where year values appear instead** — see Data Quality Notes. |
+| isAdult | "0" or "1" | BOOLEAN | No | Stored as text. **A saved run reported 487 unexpected values; source/parser cause unverified** — see Data Quality Notes. |
 | startYear | YYYY | SMALLINT | Yes | 11.74% null. Range observed: 1874–2115. |
 | endYear | YYYY | SMALLINT | Yes | 98.75% null — only populated for ended TV series. |
 | runtimeMinutes | integer | INTEGER | Yes | 64.08% null. Extreme outliers up to 3,692,080 retained but flagged. |
@@ -65,7 +67,7 @@ Action, Adult, Adventure, Animation, Biography, Comedy, Crime, Documentary, Dram
 
 ### Data quality notes
 
-- **isAdult column corruption:** 487 rows (~0.004%) contain year values (1969–2025) instead of 0/1. This is column-shift corruption from upstream IMDb exports. **Decision:** During staging-to-core load, filter `WHERE isAdult IN ('0', '1')`. Drop the 487 corrupt rows and document the count.
+- **Unexpected isAdult values:** A historical parsed run reported 487 rows. Recheck the raw lines with quoting disabled before attributing the cause. The transform quarantines any current row whose flag is not 0/1, preserving the raw staged fields and reason.
 - **runtimeMinutes outliers retained:** 413 titles exceed 1,000 minutes; 17 exceed 10,000; 2 exceed 100,000. Top outlier is `tt7493646` at 3,692,080 minutes (clearly erroneous). Retained for completeness; analysis queries should filter `WHERE runtimeMinutes < 1000` for visualization purposes.
 - **Future-dated titles (5 rows) retained.** They represent announced productions.
 - **Pre-1880 titles (32 rows) retained.** Legitimate early cinema (Lumière brothers era).
@@ -152,7 +154,7 @@ Principal cast and crew per title with role detail.
 | nconst | string | VARCHAR(12) | No | FK to person.nconst |
 | category | string | VARCHAR(30) | No | Role category, 13 distinct values (see below) |
 | job | string | TEXT | Yes | 79.87% null. Specific role description when category is generic (e.g., "screenplay" when category is "writer"). |
-| characters | JSON-formatted string | JSONB | Yes | 45.00% null. **Validated as 100% valid JSON** — load as JSONB. |
+| characters | JSON-formatted string | JSONB | Yes | 45.00% null. **Valid in the inspected sample only.** The transform validates each non-null value as an array of strings. |
 
 ### Distinct values: category (13)
 
@@ -217,7 +219,7 @@ Core attributes for every person in IMDb.
 
 - High null rates on birth/death years are normal — IMDb often doesn't have this data, especially for crew, minor performers, and historical figures.
 - Pre-1700 birth years (369 rows) are mostly legitimate: classical composers, playwrights, ancient figures whose works appear in films. **Do not filter as outliers.**
-- 67 rows have null `primaryName` (data entry edge cases). Retained as-is.
+- A saved run reported 67 null `primaryName` values. The current core requires a name; affected rows are quarantined with a reason, not inserted as fabricated people.
 
 ---
 
@@ -227,23 +229,23 @@ The most important issues found during profiling and investigation, ordered by i
 
 1. **`\N` is the universal null marker.** All seven files use it. Every staging-to-core transform applies `NULLIF(col, '\N')` to nullable columns.
 
-2. **isAdult corruption (487 rows in title.basics)** — column-shift corruption produces year values where 0/1 should be. Filter `WHERE isAdult IN ('0', '1')` during the load.
+2. **Unexpected isAdult values** — the saved 487-row observation has an unverified cause. Invalid flags in a newly validated snapshot are quarantined, not silently dropped.
 
 3. **Five comma-separated array columns** require normalization into junction tables: `title.basics.genres`, `title.crew.directors`, `title.crew.writers`, `name.basics.primaryProfession`, `name.basics.knownForTitles`.
 
-4. **One JSON column:** `title.principals.characters` is valid JSON — load as JSONB.
+4. **One JSON column:** `title.principals.characters` is checked as a JSON array of strings before casting to JSONB.
 
 5. **One non-standard sub-delimiter:** `title.akas.types` uses `\x02`, not comma. Critical to split correctly.
 
 6. **One naming inconsistency:** `title.akas.titleId` is the same as `tconst` everywhere else. Aliased during the load.
 
-7. **FK orphan rate is negligible** (0.00% — only 2 orphans found in a 1M-row sample). Strict FK enforcement is feasible. Stub UNKNOWN entries for the rare orphans rather than declaring `NOT VALID`.
+7. **Missing references are audited.** The saved prefix sample found two unresolved director IDs; it does not establish a full-dataset rate. Unresolved links are quarantined with source identifiers and reasons; no synthetic people are inserted.
 
 8. **Outliers retained, not filtered.** Future years, runtimes up to 3.7M minutes, pre-1700 birth years all retained as observed. Analysis queries apply situational filters (e.g., `runtimeMinutes < 1000` for charting).
 
 9. **Expected categorical constraints for the schema:**
    - `title.title_type` IN (11 values listed above)
    - `title_principal.category` IN (13 values listed above)
-   - `genre.genre_name` populated with 28 known values
+   - `genre.genre_name` populated dynamically from valid loaded-title genre tokens (28 in the historical inspection)
 
 10. **Title-to-rating ratio:** ~13% of titles have ratings. Most analytical queries should INNER JOIN to `title_rating` to focus on rated content; descriptive queries about IMDb's catalog as a whole should LEFT JOIN.

@@ -1,7 +1,7 @@
 -- =============================================================================
 -- IMDb Analysis Project — Core Schema
 -- =============================================================================
--- This script creates the production `core` schema with 13 tables.
+-- This script creates the analytical `core` schema with 13 tables.
 -- Run after 02_staging.sql.
 --
 -- Order of operations:
@@ -49,7 +49,7 @@ COMMENT ON TABLE core.profession IS
 -- =============================================================================
 
 -- Title: every movie, series, episode, video game, etc.
--- Filtered to exclude the 487 isAdult-corrupted rows during the staging-to-core load.
+-- Invalid required fields are quarantined in etl.rejects during transformation.
 CREATE TABLE core.title (
     tconst           VARCHAR(12)  PRIMARY KEY,
     title_type       VARCHAR(20)  NOT NULL,
@@ -69,11 +69,11 @@ CREATE TABLE core.title (
 );
 
 COMMENT ON TABLE core.title IS
-    'All IMDb titles. Format of tconst: tt followed by digits. The 487 rows with corrupt isAdult values are excluded during load.';
+    'All IMDb titles. Format of tconst: tt followed by digits. Invalid rows are retained in the ETL rejection audit.';
 
 
 -- Person: every IMDb person record.
--- Includes 2 stub records for orphan nconsts found in title.crew during quirks investigation.
+-- Contains source person records only; missing references are audited, not fabricated.
 CREATE TABLE core.person (
     nconst        VARCHAR(12)  PRIMARY KEY,
     primary_name  TEXT         NOT NULL,
@@ -82,7 +82,7 @@ CREATE TABLE core.person (
 );
 
 COMMENT ON TABLE core.person IS
-    'All IMDb persons. Format of nconst: nm followed by digits. Includes orphan-stub rows where primary_name = ''[UNKNOWN]'' for the rare nconsts that appear in title.crew but not in name.basics.';
+    'All IMDb persons. Format of nconst: nm followed by digits. Unresolved references from credits are retained in etl.rejects.';
 
 
 -- =============================================================================

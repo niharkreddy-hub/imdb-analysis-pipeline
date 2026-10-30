@@ -21,3 +21,8 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+
+# SQL test dependency and local generated outputs
+node_modules/
+reports/

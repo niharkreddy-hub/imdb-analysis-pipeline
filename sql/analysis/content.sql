@@ -83,12 +83,12 @@ ORDER BY MIN(runtime_minutes);
 
 
 -- -----------------------------------------------------------------------------
--- Q5: Annual movie production trend (last 30 years)
--- How has movie production volume changed over time?
+-- Q5: Annual movie title counts (fixed comparison period: 1994–2024)
+-- How do IMDb movie title counts vary by start year? Catalog coverage is incomplete.
 -- -----------------------------------------------------------------------------
 SELECT
     start_year,
-    COUNT(*) AS movies_released
+    COUNT(*) AS movie_title_count
 FROM title
 WHERE title_type = 'movie'
   AND start_year BETWEEN 1994 AND 2024

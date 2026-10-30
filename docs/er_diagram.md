@@ -6,6 +6,7 @@ This diagram shows the 13 tables in the `core` schema and the relationships betw
 erDiagram
     title ||--o| title_rating : "has rating"
     title ||--o{ title_episode : "parent of"
+    title ||--o| title_episode : "episode details"
     title ||--o{ title_aka : "localized as"
     title ||--o{ title_genre : "tagged with"
     title ||--o{ title_director : "directed by"
